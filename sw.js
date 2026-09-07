@@ -1,5 +1,8 @@
-const C='lg-202609071037';
-self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(['./'])).then(()=>self.skipWaiting()))});
+const C='lg-202609071216';
+// cache:'reload' matters: Pages serves this HTML with max-age=600, so a plain addAll
+// happily precaches the copy the browser already had and a deploy takes ten minutes
+// to show up -- or never, since the fetch handler below is cache-first.
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([new Request('./',{cache:'reload'})])).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
   const u=new URL(e.request.url);
