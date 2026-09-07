@@ -242,7 +242,17 @@ function setRec(id, patch){
   if(r.s===0 && r.r===0 && !r.n) delete ST.works[id]; else ST.works[id]=r;
   ST.updated = Date.now();
   try{ localStorage.setItem("lg-state", JSON.stringify(ST)); }catch(e){}
+  if(r.s>0 || r.r>0 || r.n) portalActivity();
   queueSync();
+}
+// The maker's app portal keeps a character sheet from what its apps report. Looking
+// properly at one work is a couple of minutes, and its amount is minutes/10.
+function portalActivity(){
+  try{
+    const k="portal-activity", a=JSON.parse(localStorage.getItem(k)||"[]");
+    a.push([Math.round(Date.now()/1000), "long-gallery", "art", 0.25]);
+    localStorage.setItem(k, JSON.stringify(a.slice(-2000)));
+  }catch(e){}
 }
 const SITE = !window.claude; // true on the static-site build (GitHub Pages), false inside the claude.ai artifact
 let syncTimer=null, template=null, artifactNS=undefined, syncState="idle", lastSync=0;
@@ -642,8 +652,109 @@ function progressView(){
     <div class="pblock"><h3>By region</h3>${REGIONS.map(r=>{const ws=all.filter(w=>w.region===r);return ws.length?row(r,ws):"";}).join("")}</div>
   </div>
   <div class="legend"><i style="background:var(--star)"></i>appreciated <i style="background:var(--acc);opacity:.55"></i>seen or studied</div>
+  <div class="pblock ui" style="margin-top:1.5rem"><h3>A second opinion</h3>
+    <p class="sub" style="margin:.2rem 0 .7rem">Hand what you have seen and rated to an agent through a
+    folder on this device &mdash; CoworkSyncHub, Claude Desktop, or a person &mdash; and it will suggest
+    where to look next. Nothing is uploaded.</p>
+    <div id="coachHost"></div>
+    <div id="coachReply" class="prose" style="display:none;white-space:pre-wrap;margin-top:.7rem"></div>
+  </div>
   ${loved.length?`<div style="margin-top:1.5rem"><span class="lbl">Appreciated</span><div class="gallery" style="margin-top:.6rem">${loved.map(w=>cardHTML(w, artistName(w))).join("")}</div></div>`:""}`;
-  app.innerHTML = shellHTML("progress", inner); setSyncChip();
+  app.innerHTML = shellHTML("progress", inner); setSyncChip(); mountCoach();
+}
+
+/* ============ folder cowork ============
+   The maker's shared panel (https://adervec.github.io/cowork.js) in fs mode: it drives a
+   folder you pick, we write coach/request.json into it and show whatever an agent writes
+   back to coach/reply.json. Every view rebuilds its DOM, so this re-mounts per render;
+   the script itself is fetched once. */
+function loadCowork(){
+  if(window.cowork) return Promise.resolve(window.cowork);
+  const head=document.head||document.documentElement;
+  if(!head||typeof head.appendChild!=="function") return Promise.resolve(null);
+  return new Promise(res=>{
+    try{
+      const s=document.createElement("script");
+      s.src="https://adervec.github.io/cowork.js"; s.async=true;
+      s.onload=()=>res(window.cowork||null); s.onerror=()=>res(null);
+      head.appendChild(s);
+    }catch(e){ res(null); }
+  });
+}
+function coachHash(t){ let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return h.toString(16); }
+const COACH_INSTRUCTIONS = [
+  "# The Long Gallery - coach channel",
+  "",
+  "A reader is working through a collection of " + chrono.length + " works of art. Read",
+  "`coach/request.json`:",
+  "",
+  "- `payload.totals` - how many works are seen, studied and appreciated, and the average rating.",
+  "- `payload.byEra` / `payload.byMedium` / `payload.byRegion` - seen and total in each.",
+  "- `payload.appreciated` - the works they rated highest: title, artist, era, medium, region.",
+  "- `payload.recentNotes` - their own notes, in their words.",
+  "- `payload.unseenHighlights` - major works they have not looked at yet.",
+  "",
+  "Write `coach/reply.json`:",
+  "",
+  "```json",
+  "{ \"requestHash\": \"<copy the request's requestHash verbatim>\",",
+  "  \"reply\": \"<short markdown: what their taste looks like so far, one corner of the",
+  "  collection they are clearly avoiding, and three specific works to look at next with one",
+  "  sentence each on why. Curious and concrete, never a lecture and never a scold.>\" }",
+  "```",
+  "",
+  "Recommend only works that appear in the payload's own lists."
+].join("\n");
+function mountCoach(){
+  const host=document.getElementById("coachHost"), out=document.getElementById("coachReply");
+  if(!host || host.childElementCount) return;
+  const show=t=>{ out.textContent=t||""; out.style.display=t?"block":"none"; };
+  try{ show(localStorage.getItem("lg-coach-reply")||""); }catch(e){}
+  loadCowork().then(cw=>{
+    if(!cw || host.childElementCount) return;
+    cw.mount(host, {
+      app:"long-gallery",
+      manifest:{protocol:"cowork-manifest", protocolVersion:1, app:"long-gallery",
+        channels:[{name:"coach", request:["coach/request.json"],
+                   instructions:"coach/INSTRUCTIONS.md", replyPath:"coach/reply.json"}]},
+      files:()=>{
+        const all=chrono, mark=w=>rec(w.id);
+        const tally=ws=>({seen:ws.filter(w=>mark(w).s>0).length, total:ws.length});
+        const rated=Object.entries(ST.works).filter(([,r])=>r.r>0)
+          .sort((a,b)=>b[1].r-a[1].r).slice(0,20);
+        const brief=w=>({title:w.title, artist:artistName(w), year:w.year, era:w.era,
+                         medium:w.medium, region:w.region});
+        const payload={
+          totals:{works:all.length, seen:all.filter(w=>mark(w).s>0).length,
+                  studied:all.filter(w=>mark(w).s>1).length,
+                  appreciated:all.filter(w=>mark(w).s>2).length, rated:rated.length},
+          byEra:Object.fromEntries(ERAS.map(e=>[e[1], tally(all.filter(w=>w.era===e[0]))])),
+          byMedium:Object.fromEntries(Object.entries(MEDIA)
+            .map(([k,v])=>[v, tally(all.filter(w=>w.medium===k))])
+            .filter(([,t])=>t.total)),
+          byRegion:Object.fromEntries(REGIONS.map(r=>[r, tally(all.filter(w=>w.region===r))])
+            .filter(([,t])=>t.total)),
+          appreciated:rated.map(([id,r])=>byId[id]?Object.assign(brief(byId[id]),{rating:r.r}):null)
+            .filter(Boolean),
+          recentNotes:Object.entries(ST.works).filter(([id,r])=>r.n&&byId[id]).slice(-15)
+            .map(([id,r])=>({work:byId[id].title, note:r.n})),
+          unseenHighlights:all.filter(w=>(w.sig||0)>=3 && !mark(w).s).slice(0,40).map(brief),
+        };
+        return {
+          "coach/request.json":{protocol:"long-gallery-coach", protocolVersion:1,
+            kind:"coach-request", generatedAt:new Date().toISOString(),
+            requestHash:coachHash(JSON.stringify(payload)), payload:payload},
+          "coach/INSTRUCTIONS.md":COACH_INSTRUCTIONS,
+        };
+      },
+      apply:(ch,reply)=>{
+        const t=typeof reply==="string"?reply
+          :(reply&&(reply.reply||(reply.payload&&reply.payload.reply)))||JSON.stringify(reply,null,2);
+        try{ localStorage.setItem("lg-coach-reply", t); }catch(e){}
+        show(t);
+      },
+    });
+  });
 }
 
 /* ============ image credits ============
@@ -688,6 +799,9 @@ function aboutView(){
 
     <h3>Corrections</h3>
     <p>If a picture shows the wrong object, or a credit is wrong, the fix belongs in the catalogue data — note the work's id (in the address bar) and it can be corrected at the source.</p>
+
+    <h3>Elsewhere</h3>
+    <p>More apps by the same maker, all free and local-first, are at <a href="https://adervec.github.io/portal/" target="_blank" rel="noopener">adervec.github.io</a>.</p>
   </div>`;
   app.innerHTML = shellHTML("about", inner); setSyncChip();
 }
@@ -1060,4 +1174,13 @@ document.addEventListener("keydown", e=>{
 });
 route();
 initSiteSync();
+// Let the maker's app portal know (same-origin localStorage) that this app is installed.
+try{
+  const DM=["standalone","minimal-ui","fullscreen","window-controls-overlay"];
+  if(navigator.standalone || DM.some(m=>matchMedia("(display-mode: "+m+")").matches)){
+    const k="portal-installed", reg=JSON.parse(localStorage.getItem(k)||"{}");
+    reg["long-gallery"]=Date.now();
+    localStorage.setItem(k, JSON.stringify(reg));
+  }
+}catch(e){}
 </script>
