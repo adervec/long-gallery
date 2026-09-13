@@ -1,4 +1,4 @@
-const C='lg-mtz38hrl';
+const C='lg-mtze2t4s';
 // cache:'reload' matters: Pages serves this HTML with max-age=600, so a plain addAll
 // happily precaches the copy the browser already had and a deploy takes ten minutes
 // to show up -- or never, since the fetch handler below is cache-first.
