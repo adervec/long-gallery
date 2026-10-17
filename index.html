@@ -221,6 +221,7 @@ body.appmode footer{display:none}
 .pctl button{background:#2a241d;color:#eee6d6;border:0;border-radius:99px;padding:.4rem .9rem;font:inherit;font-size:.85rem;cursor:pointer}
 .pctl .pn{font-size:.75rem;opacity:.7;margin:0 .6rem}
 @media(max-width:760px){#player.pl-split{grid-template-columns:1fr;grid-template-rows:minmax(0,1.3fr) minmax(0,1fr) auto}.pl-split .pctl{grid-column:1}}
+#amap{height:15rem;border-radius:8px;margin:.5rem 0 1.2rem;background:var(--panel2);z-index:0;max-width:48rem}
 #wmap{height:16rem;border-radius:6px;margin:.2rem 0 .5rem;background:var(--panel2);z-index:0}
 .plist{list-style:none;margin:0;padding:0 0 .2rem;font-family:Archivo,system-ui,sans-serif;font-size:.78rem;color:var(--mut);line-height:1.6}
 .plist i{display:inline-block;width:.6rem;height:.6rem;border-radius:99px;margin-right:.4rem;vertical-align:baseline}
@@ -938,13 +939,19 @@ function artistView(id){
   const a=artists[id]; if(!a){ location.hash="#/artists"; return; }
   const ws=chrono.filter(w=>w.artist===id);
   const P=(DB.portraits||{})[id];
+  // where they worked: the made/stands pins of their works, one per place, with a count
+  const pm=new Map(); for(const w of ws) for(const q of (w.places||[])) if(q.r==="made"||q.r==="exists"){
+    const k=q.lat.toFixed(2)+","+q.lng.toFixed(2), e=pm.get(k); if(e) e.n++; else pm.set(k,{...q,n:1}); }
+  const AP=[...pm.values()].sort((x,y)=>y.n-x.n).slice(0,40).map(q=>({...q, l:q.l+(q.n>1?` (${q.n} works)`:"")}));
   const inner = `<div class="ahead">${P?`<figure class="aport"><img src="${P.src}" alt="Portrait of ${esc(a.name)}"><figcaption class="cred">Portrait: <a href="${esc(P.u)}" target="_blank" rel="noopener">${esc(P.f)}</a>${P.a?" — "+esc(P.a):""}${P.l?" · "+esc(P.l):""}</figcaption></figure>`:""}
   <div class="hero"><h1>${esc(a.name)}</h1><span class="sub">${esc(a.life)} · ${esc(a.origin)}</span></div></div>
   ${a.sig?`<div class="sigline ui"><span class="sigdots">${dots(a.sig)}</span> <b>${SIGA[a.sig]}</b> — ${esc(a.sigWhy||"")}</div>`:""}
   <p class="abio">${esc(a.bio)}</p>
+  ${AP.length?`<span class="lbl">Where the work was made</span><div id="amap"></div>`:""}
   <span class="lbl">In the gallery</span>
   <div class="gallery" style="margin-top:.6rem">${ws.map(w=>cardHTML(w, w.year)).join("")}</div>`;
   app.innerHTML = shellHTML("artists", inner); setSyncChip();
+  if(AP.length) drawMap(document.getElementById("amap"), AP);
 }
 
 /* ---------- movements ---------- */
