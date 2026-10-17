@@ -190,6 +190,37 @@ body.appmode footer{display:none}
 .mtext .voice{margin-bottom:.8rem}
 .taxo a.chip small{color:var(--mut)}
 @media(max-width:899px){#wmap{height:11rem!important}}
+/* autoplay */
+.play-set{display:flex;flex-direction:column;gap:.8rem;max-width:56rem}
+.play-set fieldset{border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;background:var(--panel);display:flex;flex-direction:column;gap:.45rem}
+.play-set legend{font-family:Archivo,system-ui,sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);padding:0 .3rem}
+.pk{display:inline-flex;align-items:center;gap:.3rem;margin-right:.9rem;font-family:Archivo,system-ui,sans-serif;font-size:.82rem;white-space:nowrap}
+.pmulti{display:flex;gap:.8rem;flex-wrap:wrap}
+.pl{display:flex;flex-direction:column;font-family:Archivo,system-ui,sans-serif;font-size:.75rem;color:var(--mut);gap:.2rem;flex:1 1 12rem}
+.pl select{font:inherit;font-size:.8rem;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+.pgo{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.pgo .chip.on{background:var(--ink);color:var(--bg);font-size:.9rem;padding:.4rem 1.1rem}
+#player{position:fixed;inset:0;z-index:50;background:#0d0b09;color:#eee6d6;display:grid;grid-template-columns:1fr;grid-template-rows:1fr auto}
+#player.pl-split{grid-template-columns:minmax(0,1.6fr) minmax(16rem,1fr)}
+.pstage{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0}
+.pimg{max-width:100%;max-height:100%;object-fit:contain;cursor:pointer}
+.pcap{position:absolute;left:1rem;top:.8rem;font-family:Archivo,system-ui,sans-serif;font-size:.8rem;text-shadow:0 1px 4px #000;display:flex;flex-direction:column;opacity:.85}
+.pcap b{font-family:Fraunces,Georgia,serif;font-size:1.05rem;font-weight:600}
+.psub{position:absolute;left:50%;bottom:2.2rem;transform:translateX(-50%);max-width:min(52rem,92%);background:rgba(0,0,0,.72);padding:.5rem .9rem;border-radius:6px;font-size:clamp(1rem,2.2vw,1.45rem);line-height:1.4;text-align:center}
+.pbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.12)}
+.pbar i{display:block;height:100%;width:0;background:#c9a24a}
+.pside{display:none}
+.pl-split .pside{display:flex;flex-direction:column;gap:.6rem;padding:1.2rem;overflow:auto;background:#17130f;min-height:0}
+.pside .pa{display:flex;gap:.7rem;align-items:center;font-family:Archivo,system-ui,sans-serif}
+.pside .pa img{width:3.4rem;height:3.4rem;border-radius:99px;object-fit:cover;object-position:50% 25%}
+.pside .pa div{display:flex;flex-direction:column;font-size:.8rem;opacity:.8}.pside .pa b{font-size:1rem;opacity:1}
+.pside h2{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0;font-size:1.4rem}
+.pside .lbl{color:#a89c86;margin:0}.pside .pv{font-style:italic;line-height:1.5;margin:0}
+#pmapbox{height:14rem;border-radius:6px;flex:none}
+.pctl{grid-column:1/-1;display:flex;gap:.4rem;align-items:center;justify-content:center;padding:.45rem;background:#0d0b09;font-family:Archivo,system-ui,sans-serif}
+.pctl button{background:#2a241d;color:#eee6d6;border:0;border-radius:99px;padding:.4rem .9rem;font:inherit;font-size:.85rem;cursor:pointer}
+.pctl .pn{font-size:.75rem;opacity:.7;margin:0 .6rem}
+@media(max-width:760px){#player.pl-split{grid-template-columns:1fr;grid-template-rows:minmax(0,1.3fr) minmax(0,1fr) auto}.pl-split .pctl{grid-column:1}}
 #wmap{height:16rem;border-radius:6px;margin:.2rem 0 .5rem;background:var(--panel2);z-index:0}
 .plist{list-style:none;margin:0;padding:0 0 .2rem;font-family:Archivo,system-ui,sans-serif;font-size:.78rem;color:var(--mut);line-height:1.6}
 .plist i{display:inline-block;width:.6rem;height:.6rem;border-radius:99px;margin-right:.4rem;vertical-align:baseline}
@@ -636,6 +667,7 @@ function shellHTML(view, inner){
       <a href="#/artists" class="${tab("artists")}">Artists</a>
       <a href="#/movements" class="${tab("movements")}">Movements</a>
       <a href="#/progress" class="${tab("progress")}">Progress</a>
+      <a href="#/play" class="${tab("play")}">Autoplay</a>
       <span id="sync"></span>
     </nav>
   </header><main class="fade${view==="work"?" wmain":""}">${inner}</main>
@@ -648,14 +680,18 @@ function cardHTML(w, sub){
     <div class="cap"><div class="t">${esc(w.title)}</div>
     <div class="a"><span><span class="sigdots" title="${SIGL[w.sig]||""}">${dots(w.sig)}</span> ${esc(sub!==undefined?sub:artistName(w)+", "+w.year)}</span>${badge(w.id)}</div></div></a>`;
 }
-function homeView(){
-  const seen = Object.values(ST.works).filter(r=>r.s>0).length;
+// the Works page filter, shared with Autoplay ("also apply my Works-page filters")
+function worksMatch(w){
   const q=F.q.trim().toLowerCase();
-  const match = w => (!F.era||w.era===F.era) && (!F.med||w.medium===F.med)
+  return (!F.era||w.era===F.era) && (!F.med||w.medium===F.med)
     && (!F.sig || w.sig>=+F.sig) && (!F.mov || w.movement===F.mov)
     && (!F.reg || w.region===F.reg) && (!F.th || (w.themes||[]).includes(F.th))
     && (!F.st || (F.st==="unseen"? rec(w.id).s===0 : rec(w.id).s>=+F.st))
     && (!q || (w.title+" "+artistName(w)+" "+w.year+" "+(w.movement||"")+" "+(MEDIA[w.medium]||"")).toLowerCase().includes(q));
+}
+function homeView(){
+  const seen = Object.values(ST.works).filter(r=>r.s>0).length;
+  const match = worksMatch;
   const sel=(id,label,opts,cur)=>`<select class="chip" id="${id}"><option value="">${label}</option>${opts.map(o=>{const [v,t]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}"${cur===v?" selected":""}>${esc(t)}</option>`;}).join("")}</select>`;
   let inner = `<div class="hero"><h1>The Long Gallery</h1>
     <span class="sub">${chrono.length} works · ${seen} seen</span></div>
@@ -1159,7 +1195,7 @@ function aboutView(){
    radius = chronology (earliest at the core), angle = region, and within each region a
    contiguous band per movement, so a school reads as one constellation. Edges are the
    pre/succ lineage links already in the data. */
-let TREE = null, treeTeardown = null;
+let TREE = null, viewTeardown = null;
 function buildTree(){
   if(TREE) return TREE;
   const R0 = 70, R1 = 1000;
@@ -1519,7 +1555,7 @@ function treeView(){
 
   fit(); resize();
   const onR=()=>resize(); window.addEventListener("resize",onR);
-  treeTeardown = ()=>window.removeEventListener("resize",onR);
+  viewTeardown = ()=>window.removeEventListener("resize",onR);
 }
 
 /* ============ searchable tables ============ */
@@ -1596,10 +1632,174 @@ function tableView(){
   setSyncChip();
 }
 
+// ---- Autoplay: a hands-free walk through a chosen set of works ----
+// Settings live per device (lg-play); the walk is a queue built from them. Timed mode advances on a timer,
+// narrated mode reads with the browser voice and advances when the last sentence ends.
+const PLAY0 = {st:["unseen","seen"], era:[], med:[], reg:[], mov:[], th:[], sig:"", useF:false, order:"chrono",
+  layout:"split", pace:"timed", secs:20, say:"intro", subs:true, extra:true, mark:false, last:""};
+let PS = (()=>{ try{ return Object.assign({}, PLAY0, JSON.parse(localStorage.getItem("lg-play")||"{}")); }catch(e){ return Object.assign({}, PLAY0); } })();
+const psave = ()=>{ try{ localStorage.setItem("lg-play", JSON.stringify(PS)); }catch(e){} };
+
+function playQueue(){
+  const inS = (arr, v) => !arr.length || arr.includes(v);
+  const stOK = w => { const r=rec(w.id); if(!PS.st.length) return true;
+    return (PS.st.includes("unseen")&&r.s===0) || (PS.st.includes("seen")&&(r.s===1||r.s===2)) || (PS.st.includes("app")&&r.s===3) || (PS.st.includes("star")&&r.r>0); };
+  let ws = chrono.filter(w => DB.imgs[w.id] && stOK(w) && inS(PS.era,w.era) && inS(PS.med,w.medium) && inS(PS.reg,w.region)
+    && inS(PS.mov,w.movement) && (!PS.th.length || (w.themes||[]).some(t=>PS.th.includes(t))) && (!PS.sig || w.sig>=+PS.sig)
+    && (!PS.useF || worksMatch(w)));
+  if(PS.order==="sig") ws = ws.slice().sort((a,b)=>(b.sig||0)-(a.sig||0) || a.sortYear-b.sortYear);
+  else if(PS.order==="random"){ ws = ws.slice(); for(let i=ws.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [ws[i],ws[j]]=[ws[j],ws[i]]; } }
+  else if(PS.order==="lineage"){   // follow "feeds into" links while they stay in the set; else the next unvisited by date
+    const inSet=new Set(ws.map(w=>w.id)), done=new Set(), out=[]; let i=0, cur=null;
+    while(out.length<ws.length){
+      if(!cur){ while(done.has(ws[i].id)) i++; cur=ws[i]; }
+      out.push(cur); done.add(cur.id);
+      const nx=(cur.links.succ||[]).find(id=>inSet.has(id)&&!done.has(id)); cur=nx?byId[nx]:null;
+    }
+    ws = out;
+  }
+  return ws;
+}
+
+function playView(){
+  const n = playQueue().length;
+  const box=(k,v,t)=>`<label class="pk"><input type="checkbox" data-k="${k}" value="${esc(v)}"${PS[k].includes(v)?" checked":""}> ${esc(t)}</label>`;
+  const multi=(k,label,opts)=>`<label class="pl">${label}<select multiple size="5" data-m="${k}">${opts.map(o=>`<option${PS[k].includes(o)?" selected":""}>${esc(o)}</option>`).join("")}</select></label>`;
+  const radio=(k,v,t)=>`<label class="pk"><input type="radio" name="${k}" value="${v}"${PS[k]===v?" checked":""}> ${t}</label>`;
+  const flag=(k,t)=>`<label class="pk"><input type="checkbox" data-f="${k}"${PS[k]?" checked":""}> ${t}</label>`;
+  const resumable = PS.last && playQueue().some(w=>w.id===PS.last);
+  const inner = `<div class="hero"><h1>Autoplay</h1><span class="sub">a hands-free walk through the gallery</span></div>
+  <div class="play-set ui">
+    <fieldset><legend>Which works</legend>
+      <div>${box("st","unseen","Not seen")}${box("st","seen","Seen, not appreciated")}${box("st","app","Appreciated")}${box("st","star","Starred")}</div>
+      <div>${ERAS.map(e=>box("era",e[0],e[1])).join("")}</div>
+      <div>${Object.entries(MEDIA).map(([k,v])=>box("med",k,v)).join("")}</div>
+      <div class="pmulti">${multi("reg","Regions",REGIONS)}${multi("mov","Movements",MOVEMENTS)}${multi("th","Themes",THEMES)}</div>
+      <div>${radio("sig","","Any significance")}${radio("sig","2","◆◆ Major and up")}${radio("sig","3","◆◆◆ Landmarks only")}</div>
+      <div>${flag("useF","Also apply my Works-page filters")} <button class="chip" id="pclear">Clear choices</button></div>
+    </fieldset>
+    <fieldset><legend>Order</legend>${radio("order","chrono","By date")}${radio("order","sig","By significance")}${radio("order","random","Shuffle")}${radio("order","lineage","Follow lineage")}</fieldset>
+    <fieldset><legend>Layout</legend>${radio("layout","full","Full screen — the picture alone")}${radio("layout","split","Split — picture, with artist and map")}</fieldset>
+    <fieldset><legend>Pace</legend>
+      <div>${radio("pace","timed","Silent, timed")} <label class="pk"><input type="range" min="5" max="90" step="5" id="psecs" value="${PS.secs}"> <span id="psv">${PS.secs}</span> s each</label></div>
+      <div>${radio("pace","say","Narrated")} — read ${["title","intro","about","all"].map(v=>`<label class="pk"><input type="radio" name="say" value="${v}"${PS.say===v?" checked":""}> ${({title:"title only",intro:"the intro",about:"intro + about",all:"everything"})[v]}</label>`).join("")}</div>
+      <div>${flag("subs","Subtitles")}${flag("extra","Show extra views too")}${flag("mark","Mark each as Seen when it finishes")}</div>
+    </fieldset>
+    <div class="pgo"><button class="chip on" id="pstart"${n?"":" disabled"}>▶ Play ${n.toLocaleString()} works</button>
+      ${resumable?`<button class="chip" id="presume">Resume at “${esc(byId[PS.last].title)}”</button>`:""}
+      <span class="lbl">Keys: space pause · ← → previous/next · Enter open the work · Esc stop</span></div>
+  </div>`;
+  app.innerHTML = shellHTML("play", inner);
+  setSyncChip();
+  const set = document.querySelector(".play-set");
+  set.onchange = e=>{
+    const t=e.target;
+    if(t.dataset.k){ const a=new Set(PS[t.dataset.k]); t.checked?a.add(t.value):a.delete(t.value); PS[t.dataset.k]=[...a]; }
+    else if(t.dataset.m) PS[t.dataset.m]=[...t.selectedOptions].map(o=>o.value);
+    else if(t.dataset.f) PS[t.dataset.f]=t.checked;
+    else if(t.type==="radio") PS[t.name]=t.value;
+    psave(); const b=document.getElementById("pstart"), k=playQueue().length; b.textContent=`▶ Play ${k.toLocaleString()} works`; b.disabled=!k;
+  };
+  const sl=document.getElementById("psecs"); sl.oninput=()=>{ PS.secs=+sl.value; document.getElementById("psv").textContent=sl.value; psave(); };
+  document.getElementById("pclear").onclick=()=>{ Object.assign(PS,{st:[],era:[],med:[],reg:[],mov:[],th:[],sig:"",useF:false}); psave(); playView(); };
+  document.getElementById("pstart").onclick=()=>startPlay(playQueue(), 0);
+  const r=document.getElementById("presume"); if(r) r.onclick=()=>{ const q=playQueue(); startPlay(q, Math.max(0,q.findIndex(w=>w.id===PS.last))); };
+}
+
+function startPlay(Q, start){
+  if(!Q.length) return;
+  const ss = "speechSynthesis" in window ? speechSynthesis : null;
+  const pl = document.createElement("div"); pl.id="player"; pl.className="pl-"+PS.layout;
+  pl.innerHTML = `<div class="pstage"><img class="pimg" alt=""><div class="pcap"></div><div class="psub" hidden></div><div class="pbar"><i></i></div></div>
+    <aside class="pside"></aside>
+    <div class="pctl"><button data-a="prev" aria-label="Previous">⏮</button><button data-a="pause" aria-label="Pause">❚❚</button><button data-a="next" aria-label="Next">⏭</button>
+      <span class="pn"></span><button data-a="open" aria-label="Open this work">Open ↗</button><button data-a="stop" aria-label="Stop">✕</button></div>`;
+  document.body.appendChild(pl);
+  try{ pl.requestFullscreen && pl.requestFullscreen().catch(()=>{}); }catch(e){}
+  const $=s=>pl.querySelector(s), im=$(".pimg"), sub=$(".psub"), bar=$(".pbar i");
+  let i=start, paused=false, timer=null, flip=null, left=0, t0=0, lock=null, gen=0;
+  const wake = async()=>{ try{ lock = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; }catch(e){ lock=null; } };
+  wake();
+  const say = w => { const t=[w.title+". "+artistName(w)+", "+w.year+"."];
+    if(PS.say!=="title" && w.voice) t.push(w.voice);
+    if(PS.say==="about"||PS.say==="all") t.push(w.about);
+    if(PS.say==="all") t.push(w.context, w.hidden, w.crit, w.enjoy);
+    const raw = t.filter(Boolean).join(" ").match(/[^.!?…]+[.!?…]+["'”’)]*\s*|[^.!?…]+$/g) || [], out=[];
+    // don't break after "c." / "St." / initials: glue those pieces to the next one
+    for(const p of raw){ if(out.length && /(?:^|[\s(])(?:c|ca|fl|b|d|St|Ste|Mt|Dr|Mr|Mrs|Fr|no|vol|[A-Z])\.\s*$/.test(out[out.length-1])) out[out.length-1]+=p; else out.push(p); }
+    return out; };
+  const clear = ()=>{ clearTimeout(timer); clearInterval(flip); timer=flip=null; if(ss) ss.cancel(); };
+  function show(){
+    clear(); const my=++gen;
+    const w=Q[i]; PS.last=w.id; psave();
+    const keys=[w.id].concat(PS.extra?((DB.more&&DB.more[w.id])||[]):[]); let ki=0;
+    const src=k=>(DB.hd&&DB.hd[k])||DB.imgs[k];
+    im.src=src(keys[0]); im.alt=w.title;
+    $(".pcap").innerHTML=`<b>${esc(w.title)}</b><span>${esc(artistName(w))} · ${esc(w.year)}</span>`;
+    $(".pn").textContent=`${i+1} / ${Q.length}`;
+    if(PS.layout==="split"){
+      const P=w.artist&&(DB.portraits||{})[w.artist];
+      $(".pside").innerHTML=`<div class="pa">${P?`<img src="${P.src}" alt="">`:""}<div><b>${esc(artistName(w))}</b><span>${esc(w.artist&&artists[w.artist]?artists[w.artist].life:w.year)}</span></div></div>
+        <h2>${esc(w.title)}</h2><p class="lbl">${esc(w.year)} · ${esc(w.location||"")}</p>
+        ${w.voice?`<p class="pv">${esc(w.voice)}</p>`:""}${(w.places||[]).length?`<div id="pmapbox"></div>`:""}`;
+      if((w.places||[]).length) drawMap($("#pmapbox"), w.places);
+    }
+    if(keys.length>1) flip=setInterval(()=>{ ki=(ki+1)%keys.length; im.src=src(keys[ki]); }, PS.pace==="timed" ? Math.max(4000, PS.secs*1000/keys.length) : 9000);
+    sub.hidden=true;
+    if(PS.pace==="say" && ss){
+      const voice=ss.getVoices().find(v=>{ try{ return v.name===localStorage.getItem("lg-voice"); }catch(e){ return false; } });
+      const parts=say(w); bar.style.transition="none"; bar.style.width="0";
+      parts.forEach((txt,n)=>{
+        const u=new SpeechSynthesisUtterance(txt); if(voice){ u.voice=voice; u.lang=voice.lang; }
+        u.onstart=()=>{ if(my!==gen) return; if(PS.subs){ sub.textContent=txt.trim(); sub.hidden=false; } bar.style.width=((n+1)/parts.length*100)+"%"; };
+        if(n===parts.length-1) u.onend=()=>{ if(my===gen && !paused) done(); };
+        ss.speak(u);
+      });
+    } else { left=PS.secs*1000; run(); }
+  }
+  function run(){   // timed mode: (re)start the countdown from `left` ms, bar shows the time remaining
+    t0=performance.now();
+    const frac=1-left/(PS.secs*1000);
+    bar.style.transition="none"; bar.style.width=(frac*100)+"%"; void bar.offsetWidth;
+    bar.style.transition=`width ${left}ms linear`; bar.style.width="100%";
+    timer=setTimeout(done, left);
+  }
+  function done(){
+    const w=Q[i]; if(PS.mark && rec(w.id).s===0) setRec(w.id,{s:1});
+    if(i<Q.length-1){ i++; show(); } else stop();
+  }
+  function pause(p){
+    if(p===paused) return; paused=p; $('[data-a="pause"]').textContent=p?"▶":"❚❚";
+    if(PS.pace==="say" && ss){ p?ss.pause():ss.resume(); return; }
+    if(p){ clearTimeout(timer); left=Math.max(0,left-(performance.now()-t0)); bar.style.transition="none"; bar.style.width=getComputedStyle(bar).width; }
+    else run();
+  }
+  const go = d => { const j=i+d; if(j<0||j>=Q.length) return; i=j; paused=false; $('[data-a="pause"]').textContent="❚❚"; show(); };
+  function stop(){
+    clear(); gen++; if(lock) lock.release().catch(()=>{});
+    document.removeEventListener("keydown", key, true); document.removeEventListener("visibilitychange", vis);
+    if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+    pl.remove(); viewTeardown=null; if(location.hash==="#/play") playView();
+  }
+  const open = ()=>{ const id=Q[i].id; stop(); location.hash="#/w/"+id; };
+  const key = e=>{
+    const k=e.key; if(![" ","ArrowLeft","ArrowRight","Escape","Enter"].includes(k)) return;
+    e.preventDefault(); e.stopPropagation();
+    if(k===" ") pause(!paused); else if(k==="ArrowLeft") go(-1); else if(k==="ArrowRight") go(1); else if(k==="Escape") stop(); else open();
+  };
+  const vis = ()=>{ if(document.hidden) pause(true); else wake(); };
+  document.addEventListener("keydown", key, true); document.addEventListener("visibilitychange", vis);
+  pl.querySelector(".pctl").onclick=e=>{ const a=e.target.closest("button")?.dataset.a;
+    if(a==="prev") go(-1); else if(a==="next") go(1); else if(a==="pause") pause(!paused); else if(a==="open") open(); else if(a==="stop") stop(); };
+  im.onclick=()=>pause(!paused);
+  viewTeardown = stop;
+  show();
+}
+
 function route(){
   const h=location.hash||"#/";
   const lb=document.getElementById("lb"); if(lb) lb.remove();
-  if(treeTeardown){ treeTeardown(); treeTeardown=null; }
+  if(viewTeardown){ viewTeardown(); viewTeardown=null; }
   let m;
   if((m=h.match(/^#\/w\/(.+)$/))) workView(m[1]);
   else if((m=h.match(/^#\/a\/(.+)$/))) artistView(m[1]);
@@ -1608,6 +1808,7 @@ function route(){
   else if(h==="#/movements") movementsView();
   else if(h==="#/progress") progressView();
   else if(h==="#/tree") treeView();
+  else if(h==="#/play") playView();
   else if(h==="#/table") tableView();
   else if(h==="#/about") aboutView();
   else homeView();
