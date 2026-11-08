@@ -352,7 +352,7 @@ function setRec(id, patch){
   ST.updated = Date.now();
   try{ localStorage.setItem("lg-state", JSON.stringify(ST)); }catch(e){}
   if(r.s>0 || r.r>0 || r.n) portalActivity();
-  queueSync();
+  queueSync(); cwQueue();
 }
 // The maker's app portal keeps a character sheet from what its apps report. Looking
 // properly at one work is a couple of minutes, and its amount is minutes/10.
@@ -555,7 +555,7 @@ async function doSync(){
   }
   setSyncChip();
 }
-document.addEventListener("visibilitychange", ()=>{ if(document.hidden && syncState==="dirty") doSync(); });
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden && syncState==="dirty") doSync(); if(document.hidden && CW.timer) cwWrite(); });
 async function initSiteSync(){
   if(!SITE || !driveEnabled() || !driveOriginAllowed()) return;
   try{
@@ -1075,8 +1075,9 @@ function progressView(){
     <div id="coachHost"></div>
     <div id="coachReply" class="prose" style="display:none;white-space:pre-wrap;margin-top:.7rem"></div>
   </div>
+  ${CW.ok?`<div class="pblock ui" style="margin-top:1.5rem"><h3>Morning brief</h3><div id="cwHost"></div></div>`:""}
   ${loved.length?`<div style="margin-top:1.5rem"><span class="lbl">Appreciated</span><div class="gallery" style="margin-top:.6rem">${loved.map(w=>cardHTML(w, artistName(w))).join("")}</div></div>`:""}`;
-  app.innerHTML = shellHTML("progress", inner); setSyncChip(); mountCoach();
+  app.innerHTML = shellHTML("progress", inner); setSyncChip(); mountCoach(); cwStatus();
 }
 
 /* ============ folder cowork ============
@@ -1172,6 +1173,99 @@ function mountCoach(){
     });
   });
 }
+
+
+/* ============ Cowork folder: precomputed data for the morning / weekly brief ============
+   Same shape as GymTracker315's and the Classical Journey's: BRIEF.md to read first, brief.json for the
+   numbers, both rewritten 20 s after any change while the app is open on this computer. */
+const idb = (()=>{ const op=()=>new Promise((ok,no)=>{ const r=indexedDB.open("lg",1); r.onupgradeneeded=()=>r.result.createObjectStore("kv"); r.onsuccess=()=>ok(r.result); r.onerror=()=>no(r.error); });
+  const tx=(m,f)=>op().then(db=>new Promise((ok,no)=>{ const s=db.transaction("kv",m).objectStore("kv"), q=f(s); q.onsuccess=()=>ok(q.result); q.onerror=()=>no(q.error); }));
+  return {get:k=>tx("readonly",s=>s.get(k)), set:(k,v)=>tx("readwrite",s=>s.put(v,k))}; })();
+function briefData(){
+  const now=Date.now(), D=864e5, day=t=>new Date(t).toLocaleDateString("sv");
+  const marks=Object.entries(ST.works).filter(([id,r])=>byId[id]&&(r.s>0||r.r>0||r.n)).map(([id,r])=>({w:byId[id],r}));
+  const win=(a,b)=>marks.filter(x=>x.r.u&&x.r.u>=now-a*D&&x.r.u<now-b*D);
+  const row=x=>({id:x.w.id, title:x.w.title, by:artistName(x.w), year:x.w.year, era:(ERAS.find(e=>e[0]===x.w.era)||[])[1]||"",
+                 medium:MEDIA[x.w.medium]||x.w.medium, status:STATUS[x.r.s], stars:x.r.r||0, changed:x.r.u?day(x.r.u):""});
+  const sum=l=>({marked:l.length, seen:l.filter(x=>x.r.s>0).length, appreciated:l.filter(x=>x.r.s>2).length, rated:l.filter(x=>x.r.r>0).length, notes:l.filter(x=>x.r.n).length,
+                 eras:Object.entries(l.reduce((o,x)=>{const e=(ERAS.find(e=>e[0]===x.w.era)||[])[1]||"?"; o[e]=(o[e]||0)+1; return o;},{})).sort((a,b)=>b[1]-a[1])});
+  const last=Math.max(0,...marks.map(x=>x.r.u||0)), seen=marks.filter(x=>x.r.s>0);
+  const eraProg=ERAS.map(e=>{ const ws=chrono.filter(w=>w.era===e[0]); return [e[1], ws.filter(w=>rec(w.id).s>0).length, ws.length]; });
+  return {
+    generatedAt:new Date().toISOString(), progressUpdatedAt:ST.updated?new Date(ST.updated).toISOString():null,
+    lastActivity:last?day(last):null, daysSinceLastActivity:last?Math.floor((now-last)/D):null,
+    totals:{works:chrono.length, seen:seen.length, studied:marks.filter(x=>x.r.s===2).length, appreciated:marks.filter(x=>x.r.s>2).length,
+            rated:marks.filter(x=>x.r.r>0).length, notes:marks.filter(x=>x.r.n).length,
+            landmarksSeen:seen.filter(x=>x.w.sig===3).length, landmarks:chrono.filter(w=>w.sig===3).length},
+    last7:sum(win(7,0)), prior7:sum(win(14,7)), last30:sum(win(30,0)),
+    byEra:eraProg.map(([n,s,t])=>({era:n, seen:s, total:t})),
+    lastAutoplay:PS&&PS.last&&byId[PS.last]?{title:byId[PS.last].title, by:artistName(byId[PS.last])}:null,
+    nextLandmarks:chrono.filter(w=>w.sig===3&&!rec(w.id).s&&DB.imgs[w.id]).slice(0,5).map(w=>w.title+" — "+artistName(w)+", "+w.year),
+    recent:marks.filter(x=>x.r.u).sort((a,b)=>b.r.u-a.r.u).slice(0,15).map(row),
+  };
+}
+function briefMD(d){
+  const t=d.totals, e=l=>l.map(([k,n])=>k+" "+n).join(", ")||"none";
+  return `# The Long Gallery — morning brief data
+
+Generated ${d.generatedAt} · progress last changed ${d.progressUpdatedAt||"never"} (this computer's copy; marks made on another device arrive through Google Drive sync when it is on).
+
+Every number was computed by the app. Use them as given; \`brief.json\` has the same data as fields.
+
+## At a glance
+
+- **Last activity:** ${d.lastActivity?d.lastActivity+" ("+d.daysSinceLastActivity+" days ago)":"none yet"}
+- **Last 7 days:** ${d.last7.marked} works marked or changed — ${d.last7.seen} seen, ${d.last7.appreciated} appreciated, ${d.last7.rated} rated, ${d.last7.notes} with notes; eras: ${e(d.last7.eras)} (prior 7 days: ${d.prior7.marked} marked)
+- **Last 30 days:** ${d.last30.marked} works marked — eras: ${e(d.last30.eras)}
+- **All time:** ${t.seen} of ${t.works} works seen (${Math.round(t.seen/t.works*1000)/10}%), ${t.appreciated} appreciated, ${t.studied} studied, ${t.rated} rated, ${t.notes} with notes · landmarks ${t.landmarksSeen} of ${t.landmarks}
+- **Autoplay:** ${d.lastAutoplay?"last stopped at "+d.lastAutoplay.title+" — "+d.lastAutoplay.by:"not used yet"}
+- **Next unseen landmarks:** ${d.nextLandmarks.join("; ")||"none — every landmark seen"}
+
+## By era (seen / total)
+
+${d.byEra.map(x=>"- "+x.era+": "+x.seen+" / "+x.total).join("\n")}
+
+## Recently marked (newest first)
+
+| Changed | Work | By | Era | Status |
+|---|---|---|---|---|
+${d.recent.map(r=>"| "+r.changed+" | "+r.title+" | "+r.by+" | "+r.era+" | "+r.status+(r.stars?" "+"★".repeat(r.stars):"")+" |").join("\n")||"| — | nothing yet | | | |"}
+
+## Writing the brief
+
+- One line is plenty: what was looked at this week and one next step (an unseen landmark, or resuming Autoplay).
+- "Marked or changed" counts works whose status, rating or note changed in the window, by their last-change date.
+- If the last activity is old, say the habit has lapsed in one calm clause — never nag.
+- If this file's Generated date is more than a day old, the app hasn't been opened on this computer since; say the data is stale.
+`;
+}
+const CW={h:null, on:false, timer:null, ok:"showDirectoryPicker" in window};
+async function cwWrite(){
+  clearTimeout(CW.timer); CW.timer=null;
+  if(!CW.on||!CW.h) return;
+  try{
+    const d=briefData(), put=async(n,txt)=>{ const w=await (await CW.h.getFileHandle(n,{create:true})).createWritable(); await w.write(txt); await w.close(); };
+    await put("BRIEF.md", briefMD(d));
+    await put("brief.json", JSON.stringify({protocol:"long-gallery-cowork", protocolVersion:1, kind:"morning-brief", payload:d}, null, 1));
+  }catch(e){ CW.on=false; cwStatus(); }   // permission lapsed; the Progress page offers Resume
+}
+function cwQueue(){ if(CW.on&&!CW.timer) CW.timer=setTimeout(cwWrite, 20000); }
+async function cwPick(){ try{ CW.h=await showDirectoryPicker({id:"lgcw", mode:"readwrite"}); await idb.set("cw", CW.h); CW.on=true; await cwWrite(); }catch(e){} cwStatus(); }
+async function cwResume(){ try{ CW.on=await CW.h.requestPermission({mode:"readwrite"})==="granted"; if(CW.on) await cwWrite(); }catch(e){} cwStatus(); }
+async function cwInit(){
+  if(!CW.ok) return;
+  try{ CW.h=await idb.get("cw"); if(CW.h&&await CW.h.queryPermission({mode:"readwrite"})==="granted"){ CW.on=true; cwWrite(); } }catch(e){}
+  cwStatus();
+}
+function cwStatus(){
+  const el=document.getElementById("cwHost"); if(!el) return;
+  el.innerHTML=`<p class="sub" style="margin:.2rem 0 .6rem">${!CW.h?"Off. Choose <b>Documents\\Cowork\\Cowork Link Folders\\LongGallery</b> and this computer keeps <b>BRIEF.md</b> + <b>brief.json</b> there — this week's looking, progress by era and the next landmarks — for the daily and weekly brief."
+    :CW.on?"On → writing BRIEF.md + brief.json to <b>"+esc(CW.h.name)+"</b> after every change.":"Paused — the browser needs permission for <b>"+esc(CW.h.name)+"</b> again."}</p>
+    <div class="tools">${CW.h&&!CW.on?'<button class="chip" id="cw-resume">Resume</button>':""}<button class="chip" id="cw-pick">${CW.h?"Change folder":"Choose Cowork folder"}</button>${CW.on?'<button class="chip" id="cw-now">Write now</button>':""}</div>`;
+  const on=(s,f)=>{ const b=document.getElementById(s); if(b) b.onclick=f; };
+  on("cw-pick",cwPick); on("cw-resume",cwResume); on("cw-now",()=>cwWrite().then(cwStatus));
+}
+// ponytail: refreshed whenever this computer's app is open; a day it stays closed, the brief sees a stale Generated date
 
 /* ============ image credits ============
    CC-BY and CC-BY-SA reproductions require attribution, so every plate carries its
@@ -1861,6 +1955,7 @@ document.addEventListener("keydown", e=>{
 });
 route();
 initSiteSync();
+cwInit();
 // Let the maker's app portal know (same-origin localStorage) that this app is installed.
 try{
   const DM=["standalone","minimal-ui","fullscreen","window-controls-overlay"];
