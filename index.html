@@ -9,7 +9,9 @@
 <!-- house font: Atkinson Hyperlegible by default, reader-changeable on the Progress page -->
 <script src="https://adervec.github.io/font.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,560;1,9..144,400;1,9..144,560&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Archivo:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://adervec.github.io/fonts/fraunces.css">
+<link rel="stylesheet" href="https://adervec.github.io/fonts/source-serif-4.css">
+<link rel="stylesheet" href="https://adervec.github.io/fonts/archivo.css">
 <style>
 :root{
   --bg:#f0ede5; --panel:#faf8f2; --panel2:#e9e5d9; --ink:#26221b; --mut:#6d6353;
@@ -582,6 +584,7 @@ function syncDialog(){
       <button class="chip" id="sd-off">Disconnect</button>
       <button class="chip" id="sd-exp">Export file</button>
       <button class="chip" id="sd-imp">Import file</button>
+      <button class="chip" id="sd-reset">Erase everything</button>
       <input type="file" id="sd-file" accept="application/json" hidden>
     </div>
     <p class="sd-p" id="sd-msg"></p>
@@ -604,6 +607,13 @@ function syncDialog(){
     }catch(e){ msg("Failed: "+e.message); }
   };
   d.querySelector("#sd-off").onclick=()=>{ driveDisconnect(); setSyncChip(); msg("Disconnected — this device only."); };
+  // Only this app's own keys: every app by this maker shares one origin, so never localStorage.clear().
+  d.querySelector("#sd-reset").onclick=()=>{
+    if(!confirm("Erase everything you have seen, rated and noted on this device?\n\nA copy in Google Drive is not touched; this device is disconnected from it. Export a file first if you are not sure.")) return;
+    driveDisconnect();
+    try{ Object.keys(localStorage).filter(k=>k.startsWith("lg-")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+    location.reload();
+  };
   d.querySelector("#sd-exp").onclick=()=>{
     const a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([JSON.stringify(ST,null,1)],{type:"application/json"}));
