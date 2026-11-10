@@ -644,8 +644,8 @@ let leafletP=null;
 function loadLeaflet(){
   if(window.L) return Promise.resolve();
   return leafletP||(leafletP=new Promise((ok,no)=>{
-    const c=document.createElement("link"); c.rel="stylesheet"; c.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.append(c);
-    const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    const c=document.createElement("link"); c.rel="stylesheet"; c.href="vendor/leaflet/leaflet.min.css"; document.head.append(c);
+    const s=document.createElement("script"); s.src="vendor/leaflet/leaflet.min.js";
     s.onload=ok; s.onerror=()=>{ leafletP=null; no(); }; document.head.append(s);
   }));
 }
