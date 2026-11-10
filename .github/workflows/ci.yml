@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # The pictures are ~2 GB; the smoke test only needs the page itself.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            index.html
+            sw.js
+            manifest.webmanifest
+            .github
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # ponytail: no package.json — install the one dependency for this step only
+      - run: npm i --no-save playwright-core@1.62.0
+      - run: node --check sw.js
+      - run: node .github/smoke.mjs
