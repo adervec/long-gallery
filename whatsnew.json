@@ -6,7 +6,8 @@
    "About this app (under the font choice) shows the version, where your data lives, how much storage it uses, and a Copy diagnostics button for reporting a problem.",
    "You are told when a new version is ready, and if something goes wrong you see a message with a Reload button instead of a frozen screen.",
    "The sync dialog has an Erase everything button for what you have seen, rated and noted on this device, after asking. Your Drive copy is not touched.",
-   "Fonts and the map now load from the maker's own site, with no requests to Google Fonts or a code CDN."
+   "Fonts and the map now load from the maker's own site, with no requests to Google Fonts or a code CDN.",
+   "AI cowork sync now shows the agent's advice for review before it replaces yours, can run on a schedule from one computer, keeps a history, and can undo."
   ]
  },
  {

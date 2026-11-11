@@ -1187,6 +1187,21 @@ function mountCoach(){
         try{ localStorage.setItem("lg-coach-reply", t); }catch(e){}
         show(t);
       },
+      // cowork v2 (house standard): review the reply before it replaces the current one; undo from the history
+      channels:{
+        coach:{
+          label:"A second opinion",
+          preview:(reply)=>{ const t=typeof reply==="string"?reply:(reply&&(reply.reply||(reply.payload&&reply.payload.reply)))||""; return [{ id:"reply", label:"Show this advice in The Long Gallery (replaces the current one)", detail:t.slice(0,400) }]; },
+          apply:(reply)=>{
+            let prev=""; try{ prev=localStorage.getItem("lg-coach-reply")||""; }catch(e){}
+            const t=typeof reply==="string"?reply:(reply&&(reply.reply||(reply.payload&&reply.payload.reply)))||JSON.stringify(reply,null,2);
+            try{ localStorage.setItem("lg-coach-reply", t); }catch(e){}
+            show(t);
+            return { summary:"new advice shown", undo:{ prev } };
+          },
+          undo:(d)=>{ try{ localStorage.setItem("lg-coach-reply", d.prev||""); }catch(e){} show(d.prev||""); },
+        },
+      },
     });
   });
 }
